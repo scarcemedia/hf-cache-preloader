@@ -9,7 +9,7 @@ on:
       - "v[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]"
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 env:
@@ -19,9 +19,53 @@ jobs:
   docker:
     name: Build Docker image
     runs-on: ubuntu-latest
+    concurrency:
+      group: docker-${{ github.ref }}
+      cancel-in-progress: false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute release tag
+        id: release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch --force --tags origin 'refs/tags/v*:refs/tags/v*'
+
+          existing_tag=""
+          while IFS= read -r tag; do
+            existing_tag="$tag"
+            break
+          done < <(git tag --points-at "$GITHUB_SHA" --list 'v[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]' --sort=version:refname)
+
+          if [[ -n "$existing_tag" ]]; then
+            echo "tag=$existing_tag" >> "$GITHUB_OUTPUT"
+            echo "create_git_tag=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          month_prefix="$(date -u +'%Y.%m')"
+          latest_tag=""
+          while IFS= read -r tag; do
+            latest_tag="$tag"
+            break
+          done < <(git tag --list "v${month_prefix}.[0-9][0-9]" --sort=-version:refname)
+
+          if [[ -z "$latest_tag" ]]; then
+            build_number=1
+          else
+            latest_number="${latest_tag##*.}"
+            build_number=$((10#$latest_number + 1))
+          fi
+
+          release_tag="$(printf 'v%s.%02d' "$month_prefix" "$build_number")"
+          echo "tag=$release_tag" >> "$GITHUB_OUTPUT"
+          echo "create_git_tag=true" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -46,6 +90,7 @@ jobs:
             type=ref,event=branch
             type=ref,event=tag
             type=sha,prefix=sha-
+            type=raw,value=${{ steps.release.outputs.tag || 'not-a-release' }},enable=${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and optionally push Docker image
@@ -56,3 +101,13 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Create release Git tag
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.release.outputs.create_git_tag == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.release.outputs.tag }}" -m "Release ${{ steps.release.outputs.tag }}" "$GITHUB_SHA"
+          git push origin "refs/tags/${{ steps.release.outputs.tag }}"
