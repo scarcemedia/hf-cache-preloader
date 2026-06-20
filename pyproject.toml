@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hf-cache-preloader"
+version = "0.1.0"
+description = "Preload Hugging Face repositories into a node-local cache for Kubernetes inference workloads."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+dependencies = [
+    "huggingface-hub>=0.33.0",
+    "PyYAML>=6.0.2",
+]
+
+[project.scripts]
+hf-cache-preloader = "hf_cache_preloader.app:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.0",
+    "pyright>=1.1.400",
+    "ruff>=0.12.0",
+    "types-PyYAML>=6.0.12.20250516",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["hf_cache_preloader"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "SIM", "UP"]
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+include = ["hf_cache_preloader", "tests"]

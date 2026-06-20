@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hf-cache-preloader-config
+  namespace: model-serving
+  labels:
+    app.kubernetes.io/name: hf-cache-preloader
+    app.kubernetes.io/component: model-cache
+data:
+  models.yaml: |
+    defaults:
+      cache_dir: /models/huggingface/hub
+      repo_type: model
+      max_workers: 8
+      remove_unlisted_models: false
+      allow_patterns:
+        - "*.json"
+        - "*.safetensors"
+        - "*.model"
+        - "*.txt"
+        - "*.py"
+        - "*.tiktoken"
+        - "tokenizer*"
+        - "generation_config.json"
+        - "preprocessor_config.json"
+        - "processor_config.json"
+        - "chat_template*"
+      ignore_patterns:
+        - "*.onnx"
+        - "*.msgpack"
+        - "*.h5"
+        - "*.ot"
+        - "*.pb"
+    models:
+      - repo_id: Qwen/Qwen2.5-VL-7B-Instruct
+      - repo_id: OpenGVLab/InternVL3_5-8B
+        max_workers: 4
+      - repo_id: some-org/some-model
+        revision: main
+        allow_patterns:
+          - "*.json"
+          - "*.safetensors"
+          - "*.txt"
